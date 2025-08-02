@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="form-container">
+    <h2>Welcome, {{ user.username }}</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <div class="dashboard-links">
+      <a class="dashboard-button" href="{{ url_for('main.add_designation') }}">Designation Management</a>
+      <!-- THE FIX: This link now correctly points to the management dashboard -->
+      <a class="dashboard-button" href="{{ url_for('main.management_dashboard') }}">Team & Employee Management</a>
+      <a class="dashboard-button" href="{{ url_for('main.generate_schedule') }}">Generate Rota</a>
+    </div>
+
+    <a href="{{ url_for('main.logout') }}">Logout</a>
+  </div>
+</body>
+</html>
