@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash,jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from marshmallow import Schema, fields, validate, ValidationError
@@ -443,7 +443,7 @@ def generate_schedule():
                 if saved_schedule:
                     schedule_by_month = json.loads(saved_schedule.schedule_data)
                     schedule_exists = True
-                    # If a schedule exists, let's validate it on page load
+                    # Validate schedule on page load
                     api_key = os.getenv('GEMINI_API_KEY')
                     if api_key:
                         ai_validation_report = validate_schedule_with_ai(
@@ -488,27 +488,39 @@ def generate_schedule():
 @login_required
 def fix_schedule(team_id):
     """
-    NEW ROUTE: Triggered by the 'Attempt to Fix' button.
+    AJAX endpoint for fixing schedule with AI without page redirect.
     """
     api_key = os.getenv('GEMINI_API_KEY')
     if not api_key:
-        flash("GEMINI_API_KEY not found in environment.", "danger")
-        return redirect(url_for('main.generate_schedule', team_id=team_id))
+        return jsonify({
+            "success": False, 
+            "error": "GEMINI_API_KEY not found in environment."
+        })
 
     saved_schedule = SavedSchedule.query.filter_by(team_id=team_id).first()
     if not saved_schedule:
-        flash("No schedule found to fix.", "danger")
-        return redirect(url_for('main.generate_schedule', team_id=team_id))
+        return jsonify({
+            "success": False, 
+            "error": "No schedule found to fix."
+        })
 
-    # First, re-validate to get the list of violations
-    validation_report = validate_schedule_with_ai(saved_schedule.schedule_data, SCHEDULING_RULES_TEXT, api_key)
-    violations = validation_report.get('violations')
-
+    # First, re-validate to get current violations
+    validation_report = validate_schedule_with_ai(
+        saved_schedule.schedule_data, 
+        SCHEDULING_RULES_TEXT, 
+        api_key
+    )
+    
+    violations = validation_report.get('violations', [])
     if not violations:
-        flash("No violations were found, schedule is already valid.", "info")
-        return redirect(url_for('main.generate_schedule', team_id=team_id))
+        return jsonify({
+            "success": True, 
+            "message": "No violations found, schedule is already valid.",
+            "schedule": json.loads(saved_schedule.schedule_data),
+            "validation_report": validation_report
+        })
 
-    # Now, call the new "fix-it" function
+    # Attempt to fix the schedule
     corrected_schedule, success = fix_schedule_with_ai(
         saved_schedule.schedule_data,
         violations,
@@ -517,15 +529,28 @@ def fix_schedule(team_id):
     )
 
     if success:
-        # If the AI returns a valid, corrected schedule, update the database
+        # Update the database with corrected schedule
         saved_schedule.schedule_data = json.dumps(corrected_schedule)
         db.session.commit()
-        flash("AI has attempted to fix the schedule. Please review the updated version.", "success")
+        
+        # Re-validate the corrected schedule
+        new_validation_report = validate_schedule_with_ai(
+            json.dumps(corrected_schedule), 
+            SCHEDULING_RULES_TEXT, 
+            api_key
+        )
+        
+        return jsonify({
+            "success": True,
+            "message": "Schedule has been corrected by AI.",
+            "schedule": corrected_schedule,
+            "validation_report": new_validation_report
+        })
     else:
-        # If the AI fails, report the error
-        flash(f"AI correction failed: {corrected_schedule.get('error', 'Unknown error')}", "danger")
-
-    return redirect(url_for('main.generate_schedule', team_id=team_id))
+        return jsonify({
+            "success": False,
+            "error": f"AI correction failed: {corrected_schedule.get('error', 'Unknown error')}"
+        })
 
 @main_bp.route('/delete_schedule/<int:team_id>', methods=['POST'])
 @login_required
