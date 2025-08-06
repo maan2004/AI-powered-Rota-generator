@@ -41,6 +41,10 @@
             transition: background-color 0.3s; 
         }
         button:hover { background-color: #2980b9; }
+        button:disabled { 
+            background-color: #bdc3c7; 
+            cursor: not-allowed; 
+        }
         .btn-danger { background-color: #e74c3c; }
         .btn-danger:hover { background-color: #c0392b; }
         .btn-warning { background-color: #f39c12; }
@@ -51,6 +55,26 @@
         .flash.warning { background-color: #fff3cd; color: #856404; }
         .flash.danger { background-color: #f8d7da; color: #721c24; }
         .flash.success { background-color: #d4edda; color: #155724; }
+
+        /* Loading Spinner */
+        .loading-spinner {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 2s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
 
         /* Card Styles */
         .shift-cards-container {
@@ -88,11 +112,14 @@
     <div class="container">
         <h2>Rota Management & AI Validation 🗓️</h2>
         
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% for category, message in messages %}
-                <div class="flash {{ category }}">{{ message }}</div>
-            {% endfor %}
-        {% endwith %}
+        <!-- Flash Messages Container -->
+        <div id="flash-messages">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endwith %}
+        </div>
 
         <!-- Team Selection Form -->
         <form method="GET" id="team-select-form">
@@ -116,75 +143,86 @@
                 <h3>Existing Schedule for {{ selected_team.name }}</h3>
                 
                 <!-- AI Validation Report Card -->
-                {% if ai_validation_report %}
-                    <div class="report-card {% if ai_validation_report.is_valid %}valid{% else %}invalid{% endif %}">
-                        <h4>
-                            🤖 AI Validation Status: 
-                            {% if ai_validation_report.is_valid %}
-                                ✅ All Rules Passed
-                            {% else %}
-                                ❌ Violations Found
+                <div id="validation-report-container">
+                    {% if ai_validation_report %}
+                        <div class="report-card {% if ai_validation_report.is_valid %}valid{% else %}invalid{% endif %}">
+                            <h4>
+                                🤖 AI Validation Status: 
+                                {% if ai_validation_report.is_valid %}
+                                    ✅ All Rules Passed
+                                {% else %}
+                                    ❌ Violations Found
+                                {% endif %}
+                            </h4>
+                            {% if ai_validation_report.violations %}
+                                <p><strong>Details:</strong></p>
+                                <ul>
+                                    {% for issue in ai_validation_report.violations %}
+                                        <li>{{ issue }}</li>
+                                    {% endfor %}
+                                </ul>
+                                <!-- AJAX Fix Button -->
+                                <button type="button" id="fix-schedule-btn" class="btn-warning" onclick="fixScheduleWithAI()">
+                                    Attempt to Fix with AI
+                                </button>
                             {% endif %}
-                        </h4>
-                        {% if ai_validation_report.violations %}
-                            <p><strong>Details:</strong></p>
-                            <ul>
-                                {% for issue in ai_validation_report.violations %}
-                                    <li>{{ issue }}</li>
-                                {% endfor %}
-                            </ul>
-                            <!-- THE NEW "FIX-IT" BUTTON -->
-                            <form action="{{ url_for('main.fix_schedule', team_id=selected_team.id) }}" method="POST">
-                                <button type="submit" class="btn-warning">Attempt to Fix with AI</button>
-                            </form>
-                        {% endif %}
-                    </div>
-                {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Loading Spinner -->
+                <div id="loading-spinner" class="loading-spinner">
+                    <div class="spinner"></div>
+                    <p>AI is working on fixing the schedule...</p>
+                </div>
 
                 <form action="{{ url_for('main.delete_schedule', team_id=selected_team.id) }}" method="POST" onsubmit="return confirm('Are you sure? This will delete the schedule permanently.');">
                     <button type="submit" class="btn-danger">Delete This Schedule</button>
                 </form>
 
-                {% set shift_order = ['Morning', 'Afternoon', 'Evening', 'Night', 'Early Morning'] %}
-                {% for month_name, shifts in schedule_by_month.items() %}
-                    <h4>{{ month_name }}</h4>
-                    <div class="shift-cards-container">
-                        {% for shift_name in shift_order %}
-                            {% if shift_name in shifts %}
-                                {% set data = shifts[shift_name] %}
-                                <div class="shift-card">
-                                    <h4>{{ shift_name }} Shift</h4>
-                                    <div class="card-section">
-                                        <h5>Fixed Staff</h5>
-                                        <ul class="employee-list">
-                                            {% for employee in data.assigned_staff %}
-                                            <li>
-                                                <span class="employee-name">{{ employee.name }}</span>
-                                                <span class="employee-designation">{{ employee.designation }}</span>
-                                            </li>
-                                            {% else %}
-                                            <li><span class="no-data-text">Understaffed</span></li>
-                                            {% endfor %}
-                                        </ul>
+                <!-- Schedule Display Container -->
+                <div id="schedule-container">
+                    {% set shift_order = ['Morning', 'Afternoon', 'Evening', 'Night', 'Early Morning'] %}
+                    {% for month_name, shifts in schedule_by_month.items() %}
+                        <h4>{{ month_name }}</h4>
+                        <div class="shift-cards-container">
+                            {% for shift_name in shift_order %}
+                                {% if shift_name in shifts %}
+                                    {% set data = shifts[shift_name] %}
+                                    <div class="shift-card">
+                                        <h4>{{ shift_name }} Shift</h4>
+                                        <div class="card-section">
+                                            <h5>Fixed Staff</h5>
+                                            <ul class="employee-list">
+                                                {% for employee in data.assigned_staff %}
+                                                <li>
+                                                    <span class="employee-name">{{ employee.name }}</span>
+                                                    <span class="employee-designation">{{ employee.designation }}</span>
+                                                </li>
+                                                {% else %}
+                                                <li><span class="no-data-text">Understaffed</span></li>
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
+                                        <div class="card-section" style="background-color: #f8f9f9;">
+                                            <h5>Designated Floaters</h5>
+                                            <ul class="employee-list">
+                                                {% for floater in data.floaters %}
+                                                <li>
+                                                    <span class="employee-name">{{ floater.name }}</span>
+                                                    <span class="employee-designation">{{ floater.designation }}</span>
+                                                </li>
+                                                {% else %}
+                                                <li><span class="no-data-text">No Floaters Assigned</span></li>
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
                                     </div>
-                                    <div class="card-section" style="background-color: #f8f9f9;">
-                                        <h5>Designated Floaters</h5>
-                                        <ul class="employee-list">
-                                            {% for floater in data.floaters %}
-                                            <li>
-                                                <span class="employee-name">{{ floater.name }}</span>
-                                                <span class="employee-designation">{{ floater.designation }}</span>
-                                            </li>
-                                            {% else %}
-                                            <li><span class="no-data-text">No Floaters Assigned</span></li>
-                                            {% endfor %}
-                                        </ul>
-                                    </div>
-                                </div>
-                            {% endif %}
-                        {% endfor %}
-                    </div>
-                {% endfor %}
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                </div>
 
             <!-- If no schedule exists, show the generation form -->
             {% else %}
@@ -202,5 +240,175 @@
 
         <a href="{{ url_for('main.dashboard') }}" class="back-link">← Back to Dashboard</a>
     </div>
+
+    <script>
+        function fixScheduleWithAI() {
+            const fixBtn = document.getElementById('fix-schedule-btn');
+            const loadingSpinner = document.getElementById('loading-spinner');
+            const scheduleContainer = document.getElementById('schedule-container');
+            const validationContainer = document.getElementById('validation-report-container');
+            const flashContainer = document.getElementById('flash-messages');
+            
+            // Show loading, disable button
+            fixBtn.disabled = true;
+            fixBtn.textContent = 'Fixing...';
+            loadingSpinner.style.display = 'block';
+            
+            // Make AJAX request
+            fetch(`/fix_schedule/{{ selected_team.id if selected_team else 0 }}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Hide loading spinner
+                loadingSpinner.style.display = 'none';
+                
+                if (data.success) {
+                    // Show success message
+                    showFlashMessage(data.message, 'success');
+                    
+                    // Update the schedule display
+                    updateScheduleDisplay(data.schedule);
+                    
+                    // Update validation report
+                    updateValidationReport(data.validation_report);
+                } else {
+                    // Show error message
+                    showFlashMessage(data.error, 'danger');
+                    
+                    // Re-enable button
+                    fixBtn.disabled = false;
+                    fixBtn.textContent = 'Attempt to Fix with AI';
+                }
+            })
+            .catch(error => {
+                // Hide loading spinner
+                loadingSpinner.style.display = 'none';
+                
+                // Show error message
+                showFlashMessage('An error occurred while fixing the schedule.', 'danger');
+                
+                // Re-enable button
+                fixBtn.disabled = false;
+                fixBtn.textContent = 'Attempt to Fix with AI';
+                
+                console.error('Error:', error);
+            });
+        }
+        
+        function showFlashMessage(message, category) {
+            const flashContainer = document.getElementById('flash-messages');
+            const flashDiv = document.createElement('div');
+            flashDiv.className = `flash ${category}`;
+            flashDiv.textContent = message;
+            
+            // Clear existing messages
+            flashContainer.innerHTML = '';
+            flashContainer.appendChild(flashDiv);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                flashDiv.remove();
+            }, 5000);
+        }
+        
+        function updateScheduleDisplay(schedule) {
+            const scheduleContainer = document.getElementById('schedule-container');
+            const shiftOrder = ['Morning', 'Afternoon', 'Evening', 'Night', 'Early Morning'];
+            
+            let html = '';
+            
+            for (const [monthName, shifts] of Object.entries(schedule)) {
+                html += `<h4>${monthName}</h4>`;
+                html += '<div class="shift-cards-container">';
+                
+                for (const shiftName of shiftOrder) {
+                    if (shifts[shiftName]) {
+                        const data = shifts[shiftName];
+                        html += `
+                            <div class="shift-card">
+                                <h4>${shiftName} Shift</h4>
+                                <div class="card-section">
+                                    <h5>Fixed Staff</h5>
+                                    <ul class="employee-list">`;
+                        
+                        if (data.assigned_staff && data.assigned_staff.length > 0) {
+                            for (const employee of data.assigned_staff) {
+                                html += `
+                                    <li>
+                                        <span class="employee-name">${employee.name}</span>
+                                        <span class="employee-designation">${employee.designation}</span>
+                                    </li>`;
+                            }
+                        } else {
+                            html += '<li><span class="no-data-text">Understaffed</span></li>';
+                        }
+                        
+                        html += `
+                                    </ul>
+                                </div>
+                                <div class="card-section" style="background-color: #f8f9f9;">
+                                    <h5>Designated Floaters</h5>
+                                    <ul class="employee-list">`;
+                        
+                        if (data.floaters && data.floaters.length > 0) {
+                            for (const floater of data.floaters) {
+                                html += `
+                                    <li>
+                                        <span class="employee-name">${floater.name}</span>
+                                        <span class="employee-designation">${floater.designation}</span>
+                                    </li>`;
+                            }
+                        } else {
+                            html += '<li><span class="no-data-text">No Floaters Assigned</span></li>';
+                        }
+                        
+                        html += `
+                                    </ul>
+                                </div>
+                            </div>`;
+                    }
+                }
+                
+                html += '</div>';
+            }
+            
+            scheduleContainer.innerHTML = html;
+        }
+        
+        function updateValidationReport(validationReport) {
+            const validationContainer = document.getElementById('validation-report-container');
+            
+            let html = '';
+            const isValid = validationReport.is_valid;
+            const violations = validationReport.violations || [];
+            
+            html += `<div class="report-card ${isValid ? 'valid' : 'invalid'}">`;
+            html += `<h4>🤖 AI Validation Status: ${isValid ? '✅ All Rules Passed' : '❌ Violations Found'}</h4>`;
+            
+            if (violations.length > 0) {
+                html += '<p><strong>Details:</strong></p>';
+                html += '<ul>';
+                for (const violation of violations) {
+                    html += `<li>${violation}</li>`;
+                }
+                html += '</ul>';
+                
+                if (!isValid) {
+                    html += `
+                        <button type="button" id="fix-schedule-btn" class="btn-warning" onclick="fixScheduleWithAI()">
+                            Attempt to Fix with AI
+                        </button>`;
+                }
+            }
+            
+            html += '</div>';
+            
+            validationContainer.innerHTML = html;
+        }
+    </script>
 </body>
 </html>
