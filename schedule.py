@@ -7,50 +7,48 @@ import calendar
 # The correct import for the Google AI library
 import google.generativeai as genai
 
-# Comprehensive and accurate scheduling rules for AI validation
+# More precise and accurate scheduling rules for AI validation
 SCHEDULING_RULES_TEXT = """
 SHIFT SCHEDULING RULES FOR VALIDATION:
 
-RULE 1 - TIERED SHIFT STABILITY (Seniority Privilege):
+CRITICAL: You MUST be 100% certain before reporting ANY violation. Only report violations that definitively exist with concrete evidence.
+
+RULE 1 - TIERED SHIFT STABILITY:
 - Hierarchy Level 1 (most senior): Can stay on same shift for up to 3 consecutive months
 - Hierarchy Level 2 (middle): Can stay on same shift for up to 2 consecutive months  
-- Hierarchy Level 3+ (junior): Must rotate shifts every month (no stability)
-- Example: If a Level 1 employee is on Morning shift in Month 1, they can stay on Morning for Months 2 and 3, but must move to a different shift in Month 4
+- Hierarchy Level 3+ (junior): Must rotate shifts every month
+- ONLY report if you can prove an employee exceeded their exact allowed stability period
+- You must track each employee's consecutive months on the same shift
 
 RULE 2 - FLOATER EXEMPTION:
-- Hierarchy Level 1 employees (highest seniority) CANNOT be assigned as floaters
-- Only Level 2 and below employees can be floaters
-- Floaters are backup staff who cover for absent team members
+- Hierarchy Level 1 employees CANNOT be assigned as floaters
+- ONLY report if you find a Level 1 employee listed in the "floaters" section
+- Be very careful to identify hierarchy levels correctly
 
 RULE 3 - FAIR FLOATER ROTATION:
 - No employee can be a floater in consecutive months
-- If Employee X is a floater in Month 1, they must be assigned to fixed staff in Month 2
-- Floater duty should rotate among eligible employees (Level 2+)
+- ONLY report if you see the EXACT SAME PERSON in floaters in consecutive months
+- You must verify the person's name appears in floaters in consecutive months
 
 RULE 4 - MANDATORY SHIFT ROTATION FOR JUNIORS:
-- Level 3+ employees must work a different shift each month
-- Example: If a Level 3 employee works Morning in Month 1, they cannot work Morning in Month 2
+- Level 3+ employees must work different shifts each month when assigned to fixed staff
+- ONLY report if a Level 3+ employee works the SAME SHIFT in consecutive months as assigned_staff
+- Floater assignments don't count for this rule
 
-RULE 5 - MIXED-HIERARCHY COMPOSITION:
-- Each shift team should contain employees from different hierarchy levels when possible
-- Avoid concentrating all senior or all junior employees on one shift
-- Promotes knowledge transfer and balanced teams
+VALIDATION METHODOLOGY:
+1. First, identify the hierarchy levels of all employees based on their designations
+2. Track each employee's assignments month by month
+3. For each rule, build concrete evidence before reporting
+4. Double-check your findings
+5. If you have ANY doubt, do NOT report the violation
 
-RULE 6 - DYNAMIC TEAM COMPOSITION:
-- The exact combination of people working together should vary monthly
-- Prevents formation of static groups and encourages cross-training
-
-RULE 7 - FLOATER CALCULATION:
-- Total floaters = Total team members - (Number of shifts × People per shift)
-- If result is 0 or negative, no floaters are assigned
-- Each floater is designated to back up a specific shift
-
-VALIDATION CHECKS:
-1. Verify Level 1 employees are never in floater positions
-2. Check that no employee is floater in consecutive months  
-3. Confirm Level 3+ employees have different shifts in consecutive months
-4. Ensure each shift has mixed hierarchy levels when team size permits
-5. Validate floater count calculation and assignment logic
+RESPONSE FORMAT:
+Always respond with valid JSON:
+{
+    "is_valid": true/false,
+    "violations": ["Specific violation with employee name, months, and evidence"],
+    "validation_notes": "Brief explanation of what you checked"
+}
 """
 
 def generate_monthly_assignments(team, months):
@@ -244,43 +242,63 @@ def generate_monthly_assignments(team, months):
     return all_months_assignments
 
 
-def validate_schedule_with_ai(schedule_data, rules_text, api_key):
+def validate_schedule_with_ai(schedule_data, rules_text, api_key, team_hierarchy_info=None):
     """
-    Sends the generated schedule and rules to the Gemini API to check for violations.
+    Improved AI validation with actual team hierarchy information.
     """
+    # Build hierarchy context from actual team data
+    hierarchy_context = ""
+    if team_hierarchy_info:
+        hierarchy_context = f"""
+ACTUAL TEAM HIERARCHY INFORMATION:
+{json.dumps(team_hierarchy_info, indent=2)}
+
+IMPORTANT: Use ONLY the above hierarchy information to determine employee levels. 
+- hierarchy_level 1 = Most Senior (Level 1)
+- hierarchy_level 2 = Middle (Level 2) 
+- hierarchy_level 3+ = Junior (Level 3+)
+
+DO NOT use generic designation name assumptions. Use the actual hierarchy_level numbers provided above.
+"""
+    
     prompt = f"""
-    You are a schedule validation expert. Analyze the provided schedule against the given rules.
-    
-    CRITICAL INSTRUCTIONS:
-    1. Examine each month's schedule carefully
-    2. Track employee assignments across months to check for violations
-    3. Respond ONLY with valid JSON in this exact format:
-    {{
-        "is_valid": true/false,
-        "violations": ["specific violation with employee name and details", ...]
-    }}
-    
-    RULES TO VALIDATE:
+    You are an expert schedule validator. You must be EXTREMELY careful and conservative.
+
+    CRITICAL VALIDATION INSTRUCTIONS:
+    1. Only report violations you are 100% certain about
+    2. Provide concrete evidence for each violation
+    3. Double-check your work before reporting anything
+    4. When in doubt, do NOT report a violation
+    5. Focus on actual rule violations, not preferences or optimizations
+
+    {hierarchy_context}
+
+    STEP-BY-STEP PROCESS:
+    1. Parse the schedule structure carefully
+    2. Create a tracking table for each employee across months
+    3. Use the provided hierarchy information to identify employee levels
+    4. Check each rule systematically with evidence
+    5. Only report violations with specific employee names and months
+
     {rules_text}
 
-    SCHEDULE DATA TO ANALYZE:
+    SCHEDULE TO ANALYZE:
     {schedule_data}
-    
-    VALIDATION PROCESS:
-    1. Check Rule 1: Verify senior employees don't exceed stability limits
-    2. Check Rule 2: Ensure Level 1 employees are never floaters
-    3. Check Rule 3: Confirm no consecutive floater assignments
-    4. Check Rule 4: Verify junior employees rotate shifts monthly
-    5. Check Rule 5: Look for mixed hierarchy in shift teams
-    6. Check Rule 7: Validate floater calculations
-    
-    For each violation found, specify:
-    - Which rule was violated
-    - Which employee(s) involved
-    - In which month(s)
-    - What the violation is exactly
-    
-    If no violations are found, return: {{"is_valid": true, "violations": []}}
+
+    VALIDATION CHECKLIST:
+    □ Rule 1: Check if any employee exceeded their stability period
+    □ Rule 2: Check if any Level 1 employee is in floaters
+    □ Rule 3: Check if same person is floater in consecutive months
+    □ Rule 4: Check if Level 3+ employee has same shift in consecutive months
+
+    Return JSON with this exact format:
+    {{
+        "is_valid": true/false,
+        "violations": ["Specific violation with evidence"],
+        "validation_notes": "Summary of what was checked"
+    }}
+
+    If NO violations are found, return: {{"is_valid": true, "violations": [], "validation_notes": "All rules passed validation"}}
     """
     
     try:
@@ -288,7 +306,7 @@ def validate_schedule_with_ai(schedule_data, rules_text, api_key):
         model = genai.GenerativeModel('gemini-1.5-flash')
         generation_config = genai.types.GenerationConfig(
             response_mime_type="application/json",
-            temperature=0.1  # Lower temperature for more consistent validation
+            temperature=0.0  # Deterministic for consistent validation
         )
         response = model.generate_content(prompt, generation_config=generation_config)
         result = json.loads(response.text)
@@ -298,44 +316,65 @@ def validate_schedule_with_ai(schedule_data, rules_text, api_key):
             result['is_valid'] = len(result.get('violations', [])) == 0
         if 'violations' not in result:
             result['violations'] = []
+        if 'validation_notes' not in result:
+            result['validation_notes'] = "Validation completed"
             
         return result
     except Exception as e:
         error_message = f"AI Validation Error: {str(e)}"
-        return {"is_valid": False, "violations": [error_message]}
+        return {
+            "is_valid": False, 
+            "violations": [error_message],
+            "validation_notes": "Error occurred during validation"
+        }
 
 
-def fix_schedule_with_ai(broken_schedule_data, violations_list, rules_text, api_key):
+def fix_schedule_with_ai(broken_schedule_data, violations_list, rules_text, api_key, team_hierarchy_info=None):
     """
-    Uses AI to fix a broken schedule by addressing specific violations.
+    More targeted AI fixing with actual team hierarchy information.
     """
+    # Build hierarchy context from actual team data
+    hierarchy_context = ""
+    if team_hierarchy_info:
+        hierarchy_context = f"""
+ACTUAL TEAM HIERARCHY INFORMATION:
+{json.dumps(team_hierarchy_info, indent=2)}
+
+IMPORTANT: Use ONLY the above hierarchy information to determine employee levels.
+- hierarchy_level 1 = Most Senior (Level 1) 
+- hierarchy_level 2 = Middle (Level 2)
+- hierarchy_level 3+ = Junior (Level 3+)
+"""
+    
     prompt = f"""
-    You are a schedule correction expert. You must fix the provided schedule to resolve all violations.
-    
-    CRITICAL REQUIREMENTS:
-    1. Maintain the exact same JSON structure as the input
-    2. Keep the same months and shift names
-    3. Only reassign employees to different positions to fix violations
-    4. Ensure all rules are followed in the corrected schedule
-    5. Respond with ONLY the corrected JSON schedule, no other text
-    
-    RULES TO FOLLOW:
-    {rules_text}
-    
-    CURRENT BROKEN SCHEDULE:
+    You are a schedule correction expert. Your task is to fix ONLY the specific violations listed below.
+
+    CORRECTION PRINCIPLES:
+    1. Make MINIMAL changes - only fix what's broken
+    2. Maintain the exact same JSON structure
+    3. Keep all month names and shift names identical
+    4. Preserve as much of the original schedule as possible
+    5. Ensure corrections don't create new violations
+
+    {hierarchy_context}
+
+    CURRENT SCHEDULE:
     {broken_schedule_data}
-    
+
     SPECIFIC VIOLATIONS TO FIX:
     {json.dumps(violations_list, indent=2)}
-    
+
+    RULES REFERENCE:
+    {rules_text}
+
     CORRECTION STRATEGY:
-    - For Rule 1 violations: Move senior employees who exceeded stability to different shifts
-    - For Rule 2 violations: Move Level 1 employees from floater to fixed positions
-    - For Rule 3 violations: Swap floaters with fixed staff to break consecutive assignments
-    - For Rule 4 violations: Change junior employees' shifts to ensure monthly rotation
-    - For Rule 5 violations: Redistribute employees to achieve better hierarchy balance
-    
-    Return the corrected schedule as valid JSON with the same structure:
+    - Identify the exact employees and months mentioned in violations
+    - Use the provided hierarchy information to understand employee levels
+    - Make surgical changes (swaps, reassignments) to fix these specific issues
+    - Verify your changes don't introduce new problems
+    - Keep team balance and coverage intact
+
+    IMPORTANT: Return ONLY the corrected schedule JSON with no additional text or explanations.
     """
 
     try:
@@ -343,7 +382,7 @@ def fix_schedule_with_ai(broken_schedule_data, violations_list, rules_text, api_
         model = genai.GenerativeModel('gemini-1.5-flash')
         generation_config = genai.types.GenerationConfig(
             response_mime_type="application/json",
-            temperature=0.2  # Low temperature for consistent corrections
+            temperature=0.1  # Low temperature for consistent corrections
         )
         response = model.generate_content(prompt, generation_config=generation_config)
         corrected_schedule = json.loads(response.text)
@@ -356,3 +395,122 @@ def fix_schedule_with_ai(broken_schedule_data, violations_list, rules_text, api_
     except Exception as e:
         error_message = f"AI Correction Error: {str(e)}"
         return {"error": error_message}, False
+
+
+def validate_schedule_programmatically(schedule_data, team_hierarchy_info=None):
+    """
+    Programmatic validation using actual team hierarchy information.
+    """
+    violations = []
+    
+    try:
+        schedule = json.loads(schedule_data) if isinstance(schedule_data, str) else schedule_data
+        
+        # Build hierarchy mapping from actual team data
+        hierarchy_mapping = {}
+        if team_hierarchy_info:
+            for emp_info in team_hierarchy_info:
+                hierarchy_mapping[emp_info['name']] = emp_info['hierarchy_level']
+        
+        # Track employee assignments across months
+        employee_tracking = {}
+        month_names = list(schedule.keys())
+        
+        # Build tracking data
+        for month_name in month_names:
+            month_data = schedule[month_name]
+            
+            for shift_name, shift_data in month_data.items():
+                # Track assigned staff
+                for staff in shift_data.get('assigned_staff', []):
+                    emp_name = staff['name']
+                    if emp_name not in employee_tracking:
+                        employee_tracking[emp_name] = {}
+                    employee_tracking[emp_name][month_name] = {
+                        'role': 'assigned_staff',
+                        'shift': shift_name,
+                        'designation': staff['designation']
+                    }
+                
+                # Track floaters
+                for floater in shift_data.get('floaters', []):
+                    emp_name = floater['name']
+                    if emp_name not in employee_tracking:
+                        employee_tracking[emp_name] = {}
+                    employee_tracking[emp_name][month_name] = {
+                        'role': 'floater',
+                        'shift': shift_name,
+                        'designation': floater['designation']
+                    }
+        
+        # Rule 2: Check senior staff not in floaters
+        for emp_name, months_data in employee_tracking.items():
+            if not months_data:
+                continue
+                
+            # Use actual hierarchy level from team data
+            hierarchy_level = hierarchy_mapping.get(emp_name, 3)  # Default to junior if not found
+            
+            # Rule 2: Level 1 employees should not be floaters
+            if hierarchy_level == 1:
+                for month_name, data in months_data.items():
+                    if data['role'] == 'floater':
+                        violations.append(f"Rule 2 violated: {emp_name} (Level {hierarchy_level} - {data['designation']}) assigned as floater in {month_name}")
+        
+        # Rule 3: Check consecutive floater assignments
+        for emp_name, months_data in employee_tracking.items():
+            floater_months = []
+            for month_name in month_names:
+                if month_name in months_data and months_data[month_name]['role'] == 'floater':
+                    floater_months.append(month_name)
+                    
+            # Check for consecutive months
+            if len(floater_months) > 1:
+                # Simple check: if more than one month as floater, check if any are consecutive
+                month_indices = [month_names.index(month) for month in floater_months if month in month_names]
+                month_indices.sort()
+                
+                for i in range(len(month_indices) - 1):
+                    if month_indices[i+1] - month_indices[i] == 1:
+                        violations.append(f"Rule 3 violated: {emp_name} was floater in consecutive months: {month_names[month_indices[i]]} and {month_names[month_indices[i+1]]}")
+                        break
+        
+        # Rule 4: Junior employees must rotate shifts
+        for emp_name, months_data in employee_tracking.items():
+            if not months_data:
+                continue
+                
+            # Use actual hierarchy level from team data
+            hierarchy_level = hierarchy_mapping.get(emp_name, 3)  # Default to junior if not found
+            
+            # Only check rotation for junior employees (level 3+)
+            if hierarchy_level >= 3:
+                assigned_shifts = []
+                for month_name in month_names:
+                    if (month_name in months_data and 
+                        months_data[month_name]['role'] == 'assigned_staff'):
+                        assigned_shifts.append((month_name, months_data[month_name]['shift']))
+                
+                # Check for consecutive months with same shift
+                for i in range(len(assigned_shifts) - 1):
+                    current_month, current_shift = assigned_shifts[i]
+                    next_month, next_shift = assigned_shifts[i+1]
+                    
+                    current_idx = month_names.index(current_month)
+                    next_idx = month_names.index(next_month)
+                    
+                    if (next_idx - current_idx == 1 and current_shift == next_shift):
+                        violations.append(f"Rule 4 violated: {emp_name} (Level {hierarchy_level} - {months_data[current_month]['designation']}) worked {current_shift} shift in consecutive months: {current_month} and {next_month}")
+        
+        return {
+            "is_valid": len(violations) == 0,
+            "violations": violations,
+            "validation_notes": f"Programmatic validation checked {len(employee_tracking)} employees across {len(month_names)} months using actual team hierarchy"
+        }
+        
+    except Exception as e:
+        return {
+            "is_valid": False,
+            "violations": [f"Programmatic validation error: {str(e)}"],
+            "validation_notes": "Error during validation"
+        }
