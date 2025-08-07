@@ -11,7 +11,7 @@ from datetime import datetime
 # Import db object and models
 from app import db
 from models import User, Designation, Employee, Team, TeamMember, SavedSchedule
-from scheduler import generate_monthly_assignments, validate_schedule_with_ai, fix_schedule_with_ai, SCHEDULING_RULES_TEXT
+from scheduler import generate_monthly_assignments, validate_schedule_with_ai, fix_schedule_with_ai, validate_schedule_programmatically,SCHEDULING_RULES_TEXT
 
 main_bp = Blueprint('main', __name__)
 
@@ -424,6 +424,8 @@ def delete_team(team_id):
     flash('Team deleted successfully.', 'info')
     return redirect(url_for('main.manage_teams'))
 
+# Updated generate_schedule and fix_schedule routes with improved validation
+
 @main_bp.route('/generate_schedule', methods=['GET', 'POST'])
 @login_required
 def generate_schedule():
@@ -432,6 +434,7 @@ def generate_schedule():
     schedule_by_month = None
     schedule_exists = False
     ai_validation_report = None
+    programmatic_validation_report = None
     
     # --- Handle page load and team selection ---
     if request.method == 'GET':
@@ -443,14 +446,48 @@ def generate_schedule():
                 if saved_schedule:
                     schedule_by_month = json.loads(saved_schedule.schedule_data)
                     schedule_exists = True
-                    # Validate schedule on page load
+                    
+                    # Build team hierarchy information for validation
+                    team_hierarchy_info = []
+                    for member in selected_team.members:
+                        team_hierarchy_info.append({
+                            'name': member.employee.name,
+                            'designation': member.employee.designation.title,
+                            'hierarchy_level': member.employee.designation.hierarchy_level
+                        })
+                    
+                    # Always run programmatic validation (more reliable)
+                    programmatic_validation_report = validate_schedule_programmatically(
+                        saved_schedule.schedule_data, team_hierarchy_info
+                    )
+                    
+                    # Run AI validation if API key is available
                     api_key = os.getenv('GEMINI_API_KEY')
                     if api_key:
-                        ai_validation_report = validate_schedule_with_ai(
-                            saved_schedule.schedule_data, 
-                            SCHEDULING_RULES_TEXT, 
-                            api_key
-                        )
+                        try:
+                            ai_validation_report = validate_schedule_with_ai(
+                                saved_schedule.schedule_data, 
+                                SCHEDULING_RULES_TEXT, 
+                                api_key,
+                                team_hierarchy_info
+                            )
+                        except Exception as e:
+                            ai_validation_report = {
+                                "is_valid": False,
+                                "violations": [f"AI validation failed: {str(e)}"],
+                                "validation_notes": "AI validation error"
+                            }
+                    
+                    # Combine validation reports (prioritize programmatic validation)
+                    combined_validation = {
+                        "is_valid": programmatic_validation_report.get("is_valid", True),
+                        "violations": programmatic_validation_report.get("violations", []),
+                        "ai_violations": ai_validation_report.get("violations", []) if ai_validation_report else [],
+                        "validation_notes": programmatic_validation_report.get("validation_notes", ""),
+                        "ai_notes": ai_validation_report.get("validation_notes", "") if ai_validation_report else "",
+                        "team_hierarchy": team_hierarchy_info  # Include for frontend display
+                    }
+                    ai_validation_report = combined_validation
 
     # --- Handle new schedule generation ---
     if request.method == 'POST':
@@ -488,7 +525,7 @@ def generate_schedule():
 @login_required
 def fix_schedule(team_id):
     """
-    AJAX endpoint for fixing schedule with AI without page redirect.
+    Enhanced AJAX endpoint for fixing schedule with better validation.
     """
     api_key = os.getenv('GEMINI_API_KEY')
     if not api_key:
@@ -504,20 +541,51 @@ def fix_schedule(team_id):
             "error": "No schedule found to fix."
         })
 
-    # First, re-validate to get current violations
-    validation_report = validate_schedule_with_ai(
-        saved_schedule.schedule_data, 
-        SCHEDULING_RULES_TEXT, 
-        api_key
-    )
+    # First, get current violations using programmatic validation (more reliable)
+    programmatic_validation = validate_schedule_programmatically(saved_schedule.schedule_data)
+    violations = programmatic_validation.get('violations', [])
     
-    violations = validation_report.get('violations', [])
+    # If no programmatic violations, check AI validation
     if not violations:
+        try:
+            ai_validation = validate_schedule_with_ai(
+                saved_schedule.schedule_data, 
+                SCHEDULING_RULES_TEXT, 
+                api_key
+            )
+            violations = ai_validation.get('violations', [])
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "error": f"Validation error: {str(e)}"
+            })
+    
+    if not violations:
+        # Re-run both validations to confirm
+        final_programmatic = validate_schedule_programmatically(saved_schedule.schedule_data)
+        final_ai = None
+        try:
+            final_ai = validate_schedule_with_ai(
+                saved_schedule.schedule_data, 
+                SCHEDULING_RULES_TEXT, 
+                api_key
+            )
+        except:
+            pass
+            
+        combined_report = {
+            "is_valid": final_programmatic.get("is_valid", True),
+            "violations": final_programmatic.get("violations", []),
+            "ai_violations": final_ai.get("violations", []) if final_ai else [],
+            "validation_notes": final_programmatic.get("validation_notes", ""),
+            "ai_notes": final_ai.get("validation_notes", "") if final_ai else ""
+        }
+        
         return jsonify({
             "success": True, 
             "message": "No violations found, schedule is already valid.",
             "schedule": json.loads(saved_schedule.schedule_data),
-            "validation_report": validation_report
+            "validation_report": combined_report
         })
 
     # Attempt to fix the schedule
@@ -533,18 +601,39 @@ def fix_schedule(team_id):
         saved_schedule.schedule_data = json.dumps(corrected_schedule)
         db.session.commit()
         
-        # Re-validate the corrected schedule
-        new_validation_report = validate_schedule_with_ai(
-            json.dumps(corrected_schedule), 
-            SCHEDULING_RULES_TEXT, 
-            api_key
+        # Re-validate the corrected schedule with both methods
+        new_programmatic_validation = validate_schedule_programmatically(
+            json.dumps(corrected_schedule)
         )
+        
+        new_ai_validation = None
+        try:
+            new_ai_validation = validate_schedule_with_ai(
+                json.dumps(corrected_schedule), 
+                SCHEDULING_RULES_TEXT, 
+                api_key
+            )
+        except Exception as e:
+            new_ai_validation = {
+                "is_valid": False,
+                "violations": [f"Post-fix AI validation failed: {str(e)}"],
+                "validation_notes": "Error in post-fix validation"
+            }
+        
+        # Combine the validation results
+        combined_validation_report = {
+            "is_valid": new_programmatic_validation.get("is_valid", True),
+            "violations": new_programmatic_validation.get("violations", []),
+            "ai_violations": new_ai_validation.get("violations", []) if new_ai_validation else [],
+            "validation_notes": new_programmatic_validation.get("validation_notes", ""),
+            "ai_notes": new_ai_validation.get("validation_notes", "") if new_ai_validation else ""
+        }
         
         return jsonify({
             "success": True,
             "message": "Schedule has been corrected by AI.",
             "schedule": corrected_schedule,
-            "validation_report": new_validation_report
+            "validation_report": combined_validation_report
         })
     else:
         return jsonify({
