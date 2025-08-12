@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Employees</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="rgba(255,255,255,0.05)"/><circle cx="75" cy="75" r="1" fill="rgba(255,255,255,0.05)"/><circle cx="50" cy="10" r="1" fill="rgba(255,255,255,0.03)"/><circle cx="10" cy="60" r="1" fill="rgba(255,255,255,0.03)"/><circle cx="90" cy="40" r="1" fill="rgba(255,255,255,0.03)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            pointer-events: none;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 40px;
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            animation: slideUp 0.8s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .logo-icon {
+            width: 70px;
+            height: 70px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            color: white;
+            font-size: 28px;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+
+        h2 {
+            color: #2d3748;
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #64748b;
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+        }
+
+        .flash {
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: slideIn 0.5s ease-out;
+        }
+
+        .flash.success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border-left: 5px solid #065f46;
+        }
+
+        .flash.danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+            border-left: 5px solid #991b1b;
+        }
+
+        .employee-card {
+            background: rgba(255, 255, 255, 0.9);
+            border: 2px solid rgba(102, 126, 234, 0.1);
+            margin-bottom: 25px;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .employee-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .employee-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 35px rgba(0,0,0,0.12);
+            border-color: rgba(102, 126, 234, 0.3);
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            position: relative;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #374151;
+            font-size: 0.95rem;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 2px solid #e2e8f0;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: #f8fafc;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 15px;
+            margin-top: 25px;
+            justify-content: flex-start;
+        }
+
+        .save-btn, .delete-btn {
+            border: none;
+            color: white;
+            padding: 14px 28px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .save-btn {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+
+        .save-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+        }
+
+        .delete-btn {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+
+        .delete-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(239, 68, 68, 0.4);
+        }
+
+        .save-btn::before, .delete-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .save-btn:hover::before, .delete-btn:hover::before {
+            left: 100%;
+        }
+
+        .error-message {
+            color: #ef4444;
+            font-size: 14px;
+            display: none;
+            margin-top: 8px;
+            padding: 8px 12px;
+            background: #fef2f2;
+            border-radius: 8px;
+            border-left: 4px solid #ef4444;
+        }
+
+        .leave-dates-section {
+            grid-column: 1 / -1;
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid #e2e8f0;
+        }
+
+        .leave-dates-section label {
+            color: #667eea;
+            font-weight: 600;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Floating particles animation */
+        .particle {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: float 8s ease-in-out infinite;
+        }
+
+        .particle:nth-child(1) {
+            width: 20px;
+            height: 20px;
+            top: 10%;
+            left: 5%;
+            animation-delay: -2s;
+        }
+
+        .particle:nth-child(2) {
+            width: 15px;
+            height: 15px;
+            top: 70%;
+            right: 10%;
+            animation-delay: -4s;
+        }
+
+        .particle:nth-child(3) {
+            width: 25px;
+            height: 25px;
+            bottom: 20%;
+            left: 15%;
+            animation-delay: -1s;
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px) rotate(0deg);
+                opacity: 0.3;
+            }
+            50% {
+                transform: translateY(-30px) rotate(180deg);
+                opacity: 0.6;
+            }
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+                margin: 10px;
+            }
+            
+            .form-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .btn-row {
+                flex-direction: column;
+            }
+            
+            h2 {
+                font-size: 1.8rem;
+            }
+        }
+
+        /* Enhanced flatpickr styling */
+        .flatpickr-calendar {
+            border-radius: 12px !important;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.15) !important;
+            border: 2px solid rgba(102, 126, 234, 0.2) !important;
+        }
+
+        .flatpickr-day.selected {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+            border-color: #667eea !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+
+    <div class="container">
+        <div class="page-header">
+            <div class="logo-icon">
+                <i class="fas fa-users-cog"></i>
+            </div>
+            <h2>Manage Employees</h2>
+            <p class="subtitle">Update employee information, preferences, and leave schedules</p>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">
+                        {% if category == 'success' %}
+                            <i class="fas fa-check-circle"></i>
+                        {% elif category == 'danger' %}
+                            <i class="fas fa-exclamation-triangle"></i>
+                        {% endif %}
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% for e in employees %}
+        <div class="employee-card">
+            <form method="POST">
+                <input type="hidden" name="emp_id" value="{{ e.id }}">
+                <input type="hidden" name="action" value="update">
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>
+                            <i class="fas fa-user"></i>
+                            Name:
+                        </label>
+                        <div class="input-wrapper">
+                            <input type="text" name="name" value="{{ e.name }}" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <i class="fas fa-envelope"></i>
+                            Email:
+                        </label>
+                        <div class="input-wrapper">
+                            <input type="email" name="email" value="{{ e.email }}" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <i class="fas fa-venus-mars"></i>
+                            Gender:
+                        </label>
+                        <select name="gender" required>
+                            <option value="Male" {% if e.gender == 'Male' %}selected{% endif %}>Male</option>
+                            <option value="Female" {% if e.gender == 'Female' %}selected{% endif %}>Female</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <i class="fas fa-briefcase"></i>
+                            Designation:
+                        </label>
+                        <select name="designation_id" class="designation-select" data-emp-id="{{ e.id }}" required>
+                            {% for d in designations %}
+                                <option value="{{ d.id }}" data-leave="{{ d.monthly_leave_allowance }}"
+                                {% if d.id == e.designation_id %}selected{% endif %}>{{ d.title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <i class="fas fa-clock"></i>
+                            Shift Preference:
+                        </label>
+                        <select name="shift_preference">
+                            <option value="" {% if not e.shift_preference %}selected{% endif %}>Select Preference</option>
+                            <option value="Morning" {% if e.shift_preference == 'Morning' %}selected{% endif %}>Morning</option>
+                            <option value="Afternoon-Evening" {% if e.shift_preference == 'Afternoon-Evening' %}selected{% endif %}>Afternoon-Evening</option>
+                            <option value="Night" {% if e.shift_preference == 'Night' %}selected{% endif %}>Night</option>
+                            <option value="Any" {% if e.shift_preference == 'Any' %}selected{% endif %}>Any</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group leave-dates-section">
+                        <label>
+                            <i class="fas fa-calendar-times"></i>
+                            Leave Dates (optional):
+                        </label>
+                        <input type="text" name="leave_dates" id="leave_dates_{{ e.id }}" 
+                               value="{{ e.leave_dates_formatted | join(', ') }}" placeholder="Select dates from calendar">
+                        <div class="error-message" id="leaveError_{{ e.id }}"></div>
+                    </div>
+                </div>
+
+                <div class="btn-row">
+                    <button type="submit" class="save-btn">
+                        <i class="fas fa-save"></i>
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+
+            <form method="POST" style="display: inline;">
+                <input type="hidden" name="emp_id" value="{{ e.id }}">
+                <input type="hidden" name="action" value="delete">
+                <div class="btn-row" style="margin-top: 0;">
+                    <button type="submit" class="delete-btn" onclick="return confirm('Delete this employee?')">
+                        <i class="fas fa-trash-alt"></i>
+                        Delete Employee
+                    </button>
+                </div>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script>
+        function getMonthKey(date) {
+            return date.getFullYear() + '-' + (date.getMonth() + 1).toString().padStart(2, '0');
+        }
+
+        function countLeavesByMonth(dates) {
+            const map = {};
+            for (let d of dates) {
+                const month = getMonthKey(new Date(d));
+                map[month] = (map[month] || 0) + 1;
+            }
+            return map;
+        }
+
+        document.querySelectorAll("input[id^='leave_dates_']").forEach(input => {
+            const empId = input.id.split('_')[2];
+            const errorDiv = document.getElementById('leaveError_' + empId);
+            const designationSelect = document.querySelector(`select[data-emp-id='${empId}']`);
+            let maxLeaves = parseInt(designationSelect.selectedOptions[0].getAttribute("data-leave")) || 0;
+
+            designationSelect.addEventListener('change', () => {
+                maxLeaves = parseInt(designationSelect.selectedOptions[0].getAttribute("data-leave")) || 0;
+            });
+
+            flatpickr(input, {
+                mode: "multiple",
+                dateFormat: "Y-m-d",
+                minDate: "today",
+                onChange: function(selectedDates, dateStr, instance) {
+                    const countMap = countLeavesByMonth(selectedDates);
+                    const exceeded = Object.values(countMap).some(c => c > maxLeaves);
+                    if (exceeded) {
+                        errorDiv.innerText = `Maximum ${maxLeaves} leave(s) per month allowed.`;
+                        errorDiv.style.display = 'block';
+                        instance.clear();
+                    } else {
+                        errorDiv.innerText = '';
+                        errorDiv.style.display = 'none';
+                    }
+                }
+            });
+        });
+
+        // Add smooth scroll and animation effects
+        document.addEventListener('DOMContentLoaded', function() {
+            // Animate employee cards on load
+            const cards = document.querySelectorAll('.employee-card');
+            cards.forEach((card, index) => {
+                card.style.animationDelay = `${index * 0.1}s`;
+            });
+        });
+    </script>
+</body>
+</html>

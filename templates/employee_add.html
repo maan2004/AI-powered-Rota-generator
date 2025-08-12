@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Employee</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .form-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .form-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .form-header h2 {
+            color: #2d3748;
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .form-header .icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px auto;
+            font-size: 24px;
+            color: white;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        select {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: #fafbfc;
+        }
+
+        input[type="text"]:focus,
+        input[type="email"]:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+            background: #ffffff;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            transform: translateY(-2px);
+        }
+
+        select {
+            cursor: pointer;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .back-link {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .back-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .back-link a:hover {
+            background: rgba(102, 126, 234, 0.1);
+            transform: translateX(-4px);
+        }
+
+        .error-message {
+            color: #ef4444;
+            font-size: 0.85rem;
+            margin-top: 5px;
+            padding: 8px 12px;
+            background: rgba(239, 68, 68, 0.1);
+            border-radius: 8px;
+            border-left: 4px solid #ef4444;
+            display: none;
+        }
+
+        /* Flatpickr custom styling */
+        .flatpickr-input {
+            background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23667eea'%3E%3Cpath d='M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.89-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.11-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 20px;
+            padding-right: 50px;
+        }
+
+        @media (max-width: 768px) {
+            .form-container {
+                padding: 30px 20px;
+                margin: 10px;
+            }
+            
+            .form-header h2 {
+                font-size: 1.6rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <div class="form-header">
+            <div class="icon">
+                <i class="fas fa-user-plus"></i>
+            </div>
+            <h2>Add Employee</h2>
+        </div>
+
+        <form method="POST" id="employeeForm">
+            <div class="form-group">
+                <label for="name"><i class="fas fa-user"></i> Name:</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+
+            <div class="form-group">
+                <label for="email"><i class="fas fa-envelope"></i> Email:</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+
+            <div class="form-group">
+                <label for="gender"><i class="fas fa-venus-mars"></i> Gender:</label>
+                <select id="gender" name="gender" required>
+                    <option value="" disabled selected>Select Gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="prefer not say">Prefer not to say</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="designation"><i class="fas fa-briefcase"></i> Designation:</label>
+                <select id="designation" name="designation_id" required onchange="updateLeaveLimit()">
+                    <option value="" disabled selected>Select Designation</option>
+                    {% for d in designations %}
+                        <option value="{{ d.id }}" data-leave="{{ d.monthly_leave_allowance }}">{{ d.title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="shift_preference"><i class="fas fa-clock"></i> Shift Preference:</label>
+                <select id="shift_preference" name="shift_preference">
+                    <option value="" disabled selected>Select Preference</option>
+                    <option value="Morning">Morning</option>
+                    <option value="Afternoon-Evening">Afternoon-Evening</option>
+                    <option value="Night">Night</option>
+                    <option value="Any">Any</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="leave_dates"><i class="fas fa-calendar-alt"></i> Leave Preferences (optional):</label>
+                <input type="text" id="leave_dates" name="leave_dates" placeholder="Select one or more dates" class="flatpickr-input">
+                <div class="error-message" id="leaveError"></div>
+            </div>
+
+            <button type="submit">
+                <i class="fas fa-plus-circle"></i>
+                Add Employee
+            </button>
+        </form>
+
+        <div class="back-link">
+            <a href="{{ url_for('main.manage_employees') }}">
+                <i class="fas fa-arrow-left"></i>
+                Back to Manage Employees
+            </a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script>
+        let leavePicker;
+        let maxLeaves = 0;
+
+        function updateLeaveLimit() {
+            const designationSelect = document.getElementById('designation');
+            const selected = designationSelect.options[designationSelect.selectedIndex];
+            maxLeaves = parseInt(selected.getAttribute('data-leave')) || 0;
+            updateFlatpickrLimit();
+        }
+
+        function updateFlatpickrLimit() {
+            if (leavePicker) leavePicker.destroy();
+
+            leavePicker = flatpickr("#leave_dates", {
+                mode: "multiple",
+                dateFormat: "Y-m-d",
+                minDate: "today",
+                theme: "light",
+                onChange: function(selectedDates) {
+                    const errorDiv = document.getElementById('leaveError');
+                    const perMonth = {};
+
+                    selectedDates.forEach(date => {
+                        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                        perMonth[monthKey] = (perMonth[monthKey] || 0) + 1;
+                    });
+
+                    const exceeded = Object.values(perMonth).some(count => count > maxLeaves);
+
+                    if (exceeded) {
+                        errorDiv.style.display = 'block';
+                        errorDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> You cannot select more than ${maxLeaves} leaves in a single calendar month.`;
+                        leavePicker.clear();
+                    } else {
+                        errorDiv.style.display = 'none';
+                    }
+                }
+            });
+        }
+
+        window.onload = updateLeaveLimit;
+    </script>
+</body>
+</html>

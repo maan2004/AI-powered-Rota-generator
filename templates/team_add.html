@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Team</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .form-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .form-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .form-header h2 {
+            color: #2d3748;
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .form-header .icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px auto;
+            font-size: 24px;
+            color: white;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+
+        .flash {
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideIn 0.5s ease-out;
+        }
+
+        .flash.success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+
+        .flash.danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: #fafbfc;
+        }
+
+        input[type="text"]:focus,
+        input[type="number"]:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+            background: #ffffff;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .member-box {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 16px;
+            background: #fafbfc;
+            transition: all 0.3s ease;
+        }
+
+        .member-box:focus-within {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .member-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e7eb;
+            transition: all 0.3s ease;
+        }
+
+        .member-item:last-child {
+            border-bottom: none;
+        }
+
+        .member-item:hover {
+            background: rgba(102, 126, 234, 0.05);
+            border-radius: 8px;
+            margin: 0 -8px;
+            padding: 8px 8px;
+        }
+
+        .member-item input[type="checkbox"] {
+            width: auto;
+            margin-right: 12px;
+            transform: scale(1.2);
+            accent-color: #667eea;
+        }
+
+        .member-info {
+            flex: 1;
+        }
+
+        .member-name {
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .member-details {
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+
+        .gender-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .gender-male {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .gender-female {
+            background: #fce7f3;
+            color: #be185d;
+        }
+
+        .error-message {
+            color: #ef4444;
+            font-size: 0.85rem;
+            margin-top: 10px;
+            padding: 12px 16px;
+            background: rgba(239, 68, 68, 0.1);
+            border-radius: 8px;
+            border-left: 4px solid #ef4444;
+            display: none;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        button:disabled {
+            background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .no-employees {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6b7280;
+        }
+
+        .no-employees .icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px auto;
+            font-size: 32px;
+            color: #9ca3af;
+            background: #f3f4f6;
+        }
+
+        .back-link {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .back-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .back-link a:hover {
+            background: rgba(102, 126, 234, 0.1);
+            transform: translateX(-4px);
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .form-container {
+                padding: 30px 20px;
+                margin: 10px;
+            }
+            
+            .form-header h2 {
+                font-size: 1.6rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <div class="form-header">
+            <div class="icon">
+                <i class="fas fa-users-cog"></i>
+            </div>
+            <h2>Add Team</h2>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+                <div class="flash {{ category }}">
+                    {% if category == 'success' %}
+                        <i class="fas fa-check-circle"></i>
+                    {% elif category == 'danger' %}
+                        <i class="fas fa-exclamation-triangle"></i>
+                    {% endif %}
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endwith %}
+
+        {% if employees %}
+        <form method="POST" onsubmit="return validateTeamForm()">
+            <div class="form-group">
+                <label for="name"><i class="fas fa-tag"></i> Team Name:</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+
+            <div class="form-group">
+                <label for="template"><i class="fas fa-clock"></i> Shift Template:</label>
+                <select id="template" name="template" required onchange="updateRequirement()">
+                    <option value="3-shift">3-Shift</option>
+                    <option value="4-shift">4-Shift</option>
+                    <option value="5-shift">5-Shift</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="people"><i class="fas fa-users"></i> People per Shift:</label>
+                <input type="number" id="people" name="people" min="1" value="1" required oninput="updateRequirement()">
+            </div>
+
+            <div class="form-group">
+                <label><i class="fas fa-user-friends"></i> Team Members:</label>
+                <div id="member-box" class="member-box">
+                    {% for e in employees %}
+                        <div class="member-item">
+                            <input type="checkbox" name="members" value="{{ e.id }}" data-gender="{{ e.gender }}" onchange="updateRequirement()">
+                            <div class="member-info">
+                                <div class="member-name">{{ e.name }}</div>
+                                <div class="member-details">
+                                    {{ e.email }}
+                                    <span class="gender-badge gender-{{ e.gender.lower() }}">{{ e.gender }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+
+                <div class="error-message" id="memberError"></div>
+            </div>
+
+            <button type="submit" id="submitBtn">
+                <i class="fas fa-plus-circle"></i>
+                Add Team
+            </button>
+        </form>
+        {% else %}
+            <div class="no-employees">
+                <div class="icon">
+                    <i class="fas fa-user-slash"></i>
+                </div>
+                <h3>No Unassigned Employees</h3>
+                <p>Please add employees first before creating teams.</p>
+            </div>
+        {% endif %}
+
+        <div class="back-link">
+            <a href="{{ url_for('main.view_teams') }}">
+                <i class="fas fa-arrow-left"></i>
+                Back to Team List
+            </a>
+        </div>
+    </div>
+
+    <script>
+        function updateRequirement() {
+            const template = document.getElementById('template').value;
+            const people = parseInt(document.getElementById('people').value) || 0;
+            const checkboxes = document.querySelectorAll("input[name='members']:checked");
+
+            const maleCount = Array.from(checkboxes).filter(cb => cb.dataset.gender === 'Male').length;
+            const femaleCount = Array.from(checkboxes).filter(cb => cb.dataset.gender === 'Female').length;
+
+            const shiftMap = {
+                '3-shift': 3,
+                '4-shift': 4,
+                '5-shift': 5
+            };
+            const required = shiftMap[template] * people;
+            const selected = checkboxes.length;
+
+            const errorDiv = document.getElementById('memberError');
+            const submitBtn = document.getElementById('submitBtn');
+
+            if (selected < required) {
+                errorDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Select at least ${required} members for ${template} with ${people} per shift.`;
+                errorDiv.style.display = 'block';
+                submitBtn.disabled = true;
+            } else if (maleCount < 2 && femaleCount < 2) {
+                errorDiv.innerHTML = `<i class="fas fa-balance-scale"></i> Team must include at least 2 members from the opposite gender for diversity.`;
+                errorDiv.style.display = 'block';
+                submitBtn.disabled = true;
+            } else {
+                errorDiv.innerHTML = '';
+                errorDiv.style.display = 'none';
+                submitBtn.disabled = false;
+            }
+        }
+
+        function validateTeamForm() {
+            updateRequirement();
+            return document.getElementById('memberError').innerHTML === '';
+        }
+
+        window.onload = updateRequirement;
+    </script>
+</body>
+</html>
