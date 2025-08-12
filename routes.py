@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash,jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash,jsonify,Response
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from marshmallow import Schema, fields, validate, ValidationError
@@ -7,6 +7,8 @@ import json
 import os
 from collections import defaultdict
 from datetime import datetime
+import csv
+import io
 
 # Import db object and models
 from app import db
@@ -424,6 +426,17 @@ def delete_team(team_id):
     flash('Team deleted successfully.', 'info')
     return redirect(url_for('main.manage_teams'))
 
+def _build_team_hierarchy_info(team):
+    """Helper function to build team hierarchy information for validation."""
+    team_hierarchy_info = []
+    for member in team.members:
+        team_hierarchy_info.append({
+            'name': member.employee.name,
+            'designation': member.employee.designation.title,
+            'hierarchy_level': member.employee.designation.hierarchy_level
+        })
+    return team_hierarchy_info
+
 # Updated generate_schedule and fix_schedule routes with improved validation
 
 @main_bp.route('/generate_schedule', methods=['GET', 'POST'])
@@ -448,13 +461,7 @@ def generate_schedule():
                     schedule_exists = True
                     
                     # Build team hierarchy information for validation
-                    team_hierarchy_info = []
-                    for member in selected_team.members:
-                        team_hierarchy_info.append({
-                            'name': member.employee.name,
-                            'designation': member.employee.designation.title,
-                            'hierarchy_level': member.employee.designation.hierarchy_level
-                        })
+                    team_hierarchy_info = _build_team_hierarchy_info(selected_team)
                     
                     # Always run programmatic validation (more reliable)
                     programmatic_validation_report = validate_schedule_programmatically(
@@ -485,7 +492,8 @@ def generate_schedule():
                         "ai_violations": ai_validation_report.get("violations", []) if ai_validation_report else [],
                         "validation_notes": programmatic_validation_report.get("validation_notes", ""),
                         "ai_notes": ai_validation_report.get("validation_notes", "") if ai_validation_report else "",
-                        "team_hierarchy": team_hierarchy_info  # Include for frontend display
+                        "team_hierarchy": team_hierarchy_info,  # Include for frontend display
+                        "people_per_shift": selected_team.people_per_shift  # Include team config
                     }
                     ai_validation_report = combined_validation
 
@@ -521,125 +529,6 @@ def generate_schedule():
         months=1
     )
 
-@main_bp.route('/fix_schedule/<int:team_id>', methods=['POST'])
-@login_required
-def fix_schedule(team_id):
-    """
-    Enhanced AJAX endpoint for fixing schedule with better validation.
-    """
-    api_key = os.getenv('GEMINI_API_KEY')
-    if not api_key:
-        return jsonify({
-            "success": False, 
-            "error": "GEMINI_API_KEY not found in environment."
-        })
-
-    saved_schedule = SavedSchedule.query.filter_by(team_id=team_id).first()
-    if not saved_schedule:
-        return jsonify({
-            "success": False, 
-            "error": "No schedule found to fix."
-        })
-
-    # First, get current violations using programmatic validation (more reliable)
-    programmatic_validation = validate_schedule_programmatically(saved_schedule.schedule_data)
-    violations = programmatic_validation.get('violations', [])
-    
-    # If no programmatic violations, check AI validation
-    if not violations:
-        try:
-            ai_validation = validate_schedule_with_ai(
-                saved_schedule.schedule_data, 
-                SCHEDULING_RULES_TEXT, 
-                api_key
-            )
-            violations = ai_validation.get('violations', [])
-        except Exception as e:
-            return jsonify({
-                "success": False,
-                "error": f"Validation error: {str(e)}"
-            })
-    
-    if not violations:
-        # Re-run both validations to confirm
-        final_programmatic = validate_schedule_programmatically(saved_schedule.schedule_data)
-        final_ai = None
-        try:
-            final_ai = validate_schedule_with_ai(
-                saved_schedule.schedule_data, 
-                SCHEDULING_RULES_TEXT, 
-                api_key
-            )
-        except:
-            pass
-            
-        combined_report = {
-            "is_valid": final_programmatic.get("is_valid", True),
-            "violations": final_programmatic.get("violations", []),
-            "ai_violations": final_ai.get("violations", []) if final_ai else [],
-            "validation_notes": final_programmatic.get("validation_notes", ""),
-            "ai_notes": final_ai.get("validation_notes", "") if final_ai else ""
-        }
-        
-        return jsonify({
-            "success": True, 
-            "message": "No violations found, schedule is already valid.",
-            "schedule": json.loads(saved_schedule.schedule_data),
-            "validation_report": combined_report
-        })
-
-    # Attempt to fix the schedule
-    corrected_schedule, success = fix_schedule_with_ai(
-        saved_schedule.schedule_data,
-        violations,
-        SCHEDULING_RULES_TEXT,
-        api_key
-    )
-
-    if success:
-        # Update the database with corrected schedule
-        saved_schedule.schedule_data = json.dumps(corrected_schedule)
-        db.session.commit()
-        
-        # Re-validate the corrected schedule with both methods
-        new_programmatic_validation = validate_schedule_programmatically(
-            json.dumps(corrected_schedule)
-        )
-        
-        new_ai_validation = None
-        try:
-            new_ai_validation = validate_schedule_with_ai(
-                json.dumps(corrected_schedule), 
-                SCHEDULING_RULES_TEXT, 
-                api_key
-            )
-        except Exception as e:
-            new_ai_validation = {
-                "is_valid": False,
-                "violations": [f"Post-fix AI validation failed: {str(e)}"],
-                "validation_notes": "Error in post-fix validation"
-            }
-        
-        # Combine the validation results
-        combined_validation_report = {
-            "is_valid": new_programmatic_validation.get("is_valid", True),
-            "violations": new_programmatic_validation.get("violations", []),
-            "ai_violations": new_ai_validation.get("violations", []) if new_ai_validation else [],
-            "validation_notes": new_programmatic_validation.get("validation_notes", ""),
-            "ai_notes": new_ai_validation.get("validation_notes", "") if new_ai_validation else ""
-        }
-        
-        return jsonify({
-            "success": True,
-            "message": "Schedule has been corrected by AI.",
-            "schedule": corrected_schedule,
-            "validation_report": combined_validation_report
-        })
-    else:
-        return jsonify({
-            "success": False,
-            "error": f"AI correction failed: {corrected_schedule.get('error', 'Unknown error')}"
-        })
 
 @main_bp.route('/delete_schedule/<int:team_id>', methods=['POST'])
 @login_required
@@ -656,3 +545,348 @@ def delete_schedule(team_id):
         flash('No schedule was found for this team to delete.', 'warning')
     
     return redirect(url_for('main.generate_schedule', team_id=team_id))
+
+# Replace the fix_schedule route in routes.py with this updated version
+
+@main_bp.route('/fix_schedule/<int:team_id>', methods=['POST'])
+@login_required
+def fix_schedule(team_id):
+    """
+    Updated AJAX endpoint that only fixes REAL violations using exact validation rules.
+    """
+    api_key = os.getenv('GEMINI_API_KEY')
+    if not api_key:
+        return jsonify({
+            "success": False, 
+            "error": "GEMINI_API_KEY not found in environment."
+        })
+
+    saved_schedule = SavedSchedule.query.filter_by(team_id=team_id).first()
+    if not saved_schedule:
+        return jsonify({
+            "success": False, 
+            "error": "No schedule found to fix."
+        })
+
+    team = Team.query.get(team_id)
+    if not team:
+        return jsonify({
+            "success": False, 
+            "error": "Team not found."
+        })
+    
+    team_hierarchy_info = _build_team_hierarchy_info(team)
+
+    # Get ONLY the core violations using the exact same validation logic
+    validation_result = validate_schedule_programmatically(
+        saved_schedule.schedule_data, team_hierarchy_info
+    )
+    
+    # Filter to only core rule violations (ignore Rules 4, 5 which are less critical)
+    core_violations = []
+    for violation in validation_result.get('violations', []):
+        if ("Rule 1 violated:" in violation or 
+            "Rule 2 violated:" in violation or 
+            "Rule 3 violated:" in violation):
+            core_violations.append(violation)
+    
+    print(f"DEBUG: Found {len(core_violations)} core violations to fix")
+    for v in core_violations:
+        print(f"DEBUG: Violation: {v}")
+    
+    if not core_violations:
+        return jsonify({
+            "success": True, 
+            "message": "Schedule is already optimal - no core violations found.",
+            "schedule": json.loads(saved_schedule.schedule_data),
+            "validation_report": {
+                "is_valid": True,
+                "violations": [],
+                "validation_notes": "No core violations found"
+            },
+            "no_changes_possible": True
+        })
+
+    # Attempt to fix using AI with ONLY the core violations
+    ai_result, success = fix_schedule_with_ai(
+        saved_schedule.schedule_data,
+        core_violations,  # Only pass core violations
+        SCHEDULING_RULES_TEXT,
+        api_key,
+        team_hierarchy_info
+    )
+
+    if success:
+        corrected_schedule = ai_result.get('schedule')
+        changes_made = ai_result.get('changes_made', [])
+        violations_fixed = ai_result.get('violations_fixed', [])
+        violations_remaining = ai_result.get('violations_remaining', [])
+        
+        # Validate the corrected schedule structure
+        if not corrected_schedule or not isinstance(corrected_schedule, dict):
+            return jsonify({
+                "success": False,
+                "error": "AI returned invalid schedule format"
+            })
+        
+        # Only update the database if AI actually made changes
+        if changes_made:
+            # Update the database with corrected schedule
+            saved_schedule.schedule_data = json.dumps(corrected_schedule)
+            saved_schedule.generated_on = datetime.utcnow()
+            db.session.commit()
+            print("DEBUG: Database updated with corrected schedule")
+        
+        # Re-validate to confirm the fixes
+        final_validation = validate_schedule_programmatically(
+            json.dumps(corrected_schedule), team_hierarchy_info
+        )
+        
+        # Filter final violations to core rules only
+        final_core_violations = []
+        for violation in final_validation.get('violations', []):
+            if ("Rule 1 violated:" in violation or 
+                "Rule 2 violated:" in violation or 
+                "Rule 3 violated:" in violation):
+                final_core_violations.append(violation)
+        
+        combined_validation_report = {
+            "is_valid": len(final_core_violations) == 0,
+            "violations": final_core_violations,
+            "validation_notes": "Re-validated after AI fixes"
+        }
+        
+        # Build success message
+        if len(violations_fixed) > 0:
+            if len(final_core_violations) == 0:
+                message = f"✅ AI successfully fixed all {len(violations_fixed)} violation(s)! Schedule is now optimal."
+            else:
+                message = f"🔧 AI fixed {len(violations_fixed)} violation(s), but {len(final_core_violations)} issue(s) require manual intervention."
+        else:
+            message = ai_result.get('message', 'AI analyzed the schedule but could not make improvements.')
+        
+        return jsonify({
+            "success": True,
+            "message": message,
+            "schedule": corrected_schedule,
+            "validation_report": combined_validation_report,
+            "changes_made": changes_made,
+            "violations_fixed": violations_fixed,
+            "remaining_violations": final_core_violations,
+            "original_violations_count": len(core_violations),
+            "final_violations_count": len(final_core_violations),
+            "ai_analysis": ai_result.get('ai_analysis', ''),
+            "ai_explanation": ai_result.get('ai_explanation', '')
+        })
+        
+    else:
+        error_details = ai_result.get('error', 'Unknown error occurred during AI processing')
+        return jsonify({
+            "success": False,
+            "error": f"AI correction failed: {error_details}"
+        })
+    
+@main_bp.route('/download_schedule_csv/<int:team_id>')
+@login_required
+def download_schedule_csv(team_id):
+    """
+    Downloads the saved schedule for a team as a CSV file.
+    """
+    # Get the team and schedule
+    team = Team.query.get_or_404(team_id)
+    saved_schedule = SavedSchedule.query.filter_by(team_id=team_id).first()
+    
+    if not saved_schedule:
+        flash('No schedule found for this team.', 'danger')
+        return redirect(url_for('main.generate_schedule', team_id=team_id))
+    
+    try:
+        schedule_data = json.loads(saved_schedule.schedule_data)
+    except:
+        flash('Invalid schedule data format.', 'danger')
+        return redirect(url_for('main.generate_schedule', team_id=team_id))
+    
+    # Create CSV content
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # CSV Headers
+    writer.writerow([
+        'Team Name', 'Month', 'Shift', 'Employee Name', 
+        'Employee Designation', 'Role', 'Generated On'
+    ])
+    
+    # Define shift order for consistent output
+    shift_order = ['Early Morning', 'Morning', 'Afternoon', 'Evening', 'Night']
+    
+    # Process each month and shift
+    for month_name, shifts in schedule_data.items():
+        for shift_name in shift_order:
+            if shift_name in shifts:
+                shift_data = shifts[shift_name]
+                
+                # Add assigned staff
+                for employee in shift_data.get('assigned_staff', []):
+                    writer.writerow([
+                        team.name,
+                        month_name,
+                        shift_name,
+                        employee['name'],
+                        employee['designation'],
+                        'Assigned Staff',
+                        saved_schedule.generated_on.strftime('%Y-%m-%d %H:%M') if saved_schedule.generated_on else 'Unknown'
+                    ])
+                
+                # Add floaters
+                for employee in shift_data.get('floaters', []):
+                    writer.writerow([
+                        team.name,
+                        month_name,
+                        shift_name,
+                        employee['name'],
+                        employee['designation'],
+                        'Floater',
+                        saved_schedule.generated_on.strftime('%Y-%m-%d %H:%M') if saved_schedule.generated_on else 'Unknown'
+                    ])
+    
+    # Prepare the response
+    csv_content = output.getvalue()
+    output.close()
+    
+    # Generate filename with team name and current date
+    filename = f"rota_{team.name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.csv"
+    
+    # Create response
+    response = Response(
+        csv_content,
+        mimetype='text/csv',
+        headers={
+            'Content-Disposition': f'attachment; filename={filename}',
+            'Content-Type': 'text/csv; charset=utf-8'
+        }
+    )
+    
+    return response
+
+@main_bp.route('/download_schedule_detailed_csv/<int:team_id>')
+@login_required
+def download_schedule_detailed_csv(team_id):
+    """
+    Downloads a more detailed CSV with monthly summary and employee statistics.
+    """
+    # Get the team and schedule
+    team = Team.query.get_or_404(team_id)
+    saved_schedule = SavedSchedule.query.filter_by(team_id=team_id).first()
+    
+    if not saved_schedule:
+        flash('No schedule found for this team.', 'danger')
+        return redirect(url_for('main.generate_schedule', team_id=team_id))
+    
+    try:
+        schedule_data = json.loads(saved_schedule.schedule_data)
+    except:
+        flash('Invalid schedule data format.', 'danger')
+        return redirect(url_for('main.generate_schedule', team_id=team_id))
+    
+    # Create CSV content
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Add header information
+    writer.writerow(['TEAM ROTA SCHEDULE - DETAILED EXPORT'])
+    writer.writerow([f'Team: {team.name}'])
+    writer.writerow([f'Shift Template: {team.shift_template}'])
+    writer.writerow([f'People per Shift: {team.people_per_shift}'])
+    writer.writerow([f'Generated: {saved_schedule.generated_on.strftime("%Y-%m-%d %H:%M") if saved_schedule.generated_on else "Unknown"}'])
+    writer.writerow([f'Exported: {datetime.now().strftime("%Y-%m-%d %H:%M")}'])
+    writer.writerow([])  # Empty row
+    
+    # Monthly breakdown section
+    writer.writerow(['MONTHLY SHIFT ASSIGNMENTS'])
+    writer.writerow([
+        'Month', 'Shift', 'Assigned Staff Names', 'Floater Names', 
+        'Total Staff', 'Staff Count', 'Floater Count'
+    ])
+    
+    shift_order = ['Early Morning', 'Morning', 'Afternoon', 'Evening', 'Night']
+    
+    for month_name, shifts in schedule_data.items():
+        for shift_name in shift_order:
+            if shift_name in shifts:
+                shift_data = shifts[shift_name]
+                
+                assigned_names = [emp['name'] for emp in shift_data.get('assigned_staff', [])]
+                floater_names = [emp['name'] for emp in shift_data.get('floaters', [])]
+                
+                writer.writerow([
+                    month_name,
+                    shift_name,
+                    '; '.join(assigned_names),
+                    '; '.join(floater_names),
+                    len(assigned_names) + len(floater_names),
+                    len(assigned_names),
+                    len(floater_names)
+                ])
+    
+    writer.writerow([])  # Empty row
+    
+    # Employee summary section
+    writer.writerow(['EMPLOYEE ASSIGNMENT SUMMARY'])
+    writer.writerow([
+        'Employee Name', 'Designation', 'Total Assignments', 
+        'Assigned Staff Count', 'Floater Count', 'Months Active'
+    ])
+    
+    # Calculate employee statistics
+    employee_stats = defaultdict(lambda: {
+        'designation': '',
+        'assigned_count': 0,
+        'floater_count': 0,
+        'months': set()
+    })
+    
+    for month_name, shifts in schedule_data.items():
+        for shift_name, shift_data in shifts.items():
+            # Count assigned staff
+            for employee in shift_data.get('assigned_staff', []):
+                emp_name = employee['name']
+                employee_stats[emp_name]['designation'] = employee['designation']
+                employee_stats[emp_name]['assigned_count'] += 1
+                employee_stats[emp_name]['months'].add(month_name)
+            
+            # Count floaters
+            for employee in shift_data.get('floaters', []):
+                emp_name = employee['name']
+                employee_stats[emp_name]['designation'] = employee['designation']
+                employee_stats[emp_name]['floater_count'] += 1
+                employee_stats[emp_name]['months'].add(month_name)
+    
+    # Write employee statistics
+    for emp_name, stats in sorted(employee_stats.items()):
+        writer.writerow([
+            emp_name,
+            stats['designation'],
+            stats['assigned_count'] + stats['floater_count'],
+            stats['assigned_count'],
+            stats['floater_count'],
+            len(stats['months'])
+        ])
+    
+    # Prepare the response
+    csv_content = output.getvalue()
+    output.close()
+    
+    # Generate filename
+    filename = f"rota_detailed_{team.name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.csv"
+    
+    # Create response
+    response = Response(
+        csv_content,
+        mimetype='text/csv',
+        headers={
+            'Content-Disposition': f'attachment; filename={filename}',
+            'Content-Type': 'text/csv; charset=utf-8'
+        }
+    )
+    
+    return response
