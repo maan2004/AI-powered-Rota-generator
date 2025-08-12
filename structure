@@ -1,0 +1,27 @@
+shift_rota_project/
+│
+├── app.py                  # Main application setup and initialization.
+├── models.py               # All your database table definitions (User, Team, etc.).
+├── routes.py               # All your webpage routes (@app.route).
+├── scheduler.py            # The core scheduling logic and AI validator.
+│
+├── .env                    # Your secret keys (DATABASE_URL, SECRET_KEY, GEMINI_API_KEY).
+├── requirements.txt        # Lists all the Python packages your project needs.
+│
+├── static/                 # Folder for CSS, JavaScript, and images (optional).
+│   └── css/
+│       └── style.css
+│
+└── templates/              # Folder for all your HTML files.
+    ├── home.html
+    ├── login.html
+    ├── signup.html
+    ├── dashboard.html
+    ├── designation_add.html
+    ├── designation_manage.html
+    ├── employee_add.html
+    ├── employee_manage.html
+    ├── team_add.html
+    ├── team_manage.html
+    ├── team_dashboard.html
+    └── generate_schedule.html
